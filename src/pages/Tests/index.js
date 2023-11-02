@@ -8,6 +8,7 @@ import {
   Modal,
   TextInput,
   TouchableOpacity,
+  ScrollView,
 } from "react-native";
 import axios from "axios";
 import API_BASE_URL from "../../apiConfig"; 
@@ -18,6 +19,7 @@ import { Picker } from "@react-native-picker/picker";
 
 import { Container, Texto } from "../Home/styles";
 import Header from "../../components/Header";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 function Tests() {
   const [users, setUsers] = useState([]);

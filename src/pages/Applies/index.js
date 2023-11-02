@@ -21,11 +21,13 @@ import { Picker } from "@react-native-picker/picker";
 import { Container, Texto } from "../Home/styles";
 import Header from "../../components/Header";
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 function Applies() {
   const [applies, setApplies] = useState([]);
-  const [selectedTests, setSelectedTests] = useState([]);
+  const [selectedTests, setSelectedTests] = useState([]); // Lista de testes selecionados
 
-  const [tests, setTests] = useState([]);
+  const [tests, setTests] = useState([]); // Lista de testes disponíveis
   const [isTestModalVisible, setIsTestModalVisible] = useState(false);
   const [selectedTestId, setSelectedTestId] = useState(null);
 
@@ -85,19 +87,67 @@ function Applies() {
     return `${day}/${month}/${year}`;
   }
 
+  const getAuthToken = async () => {
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      return token;
+    } catch (error) {
+      console.error('Erro ao recuperar o token de autenticação:', error);
+      return null;
+    }
+  };
+
   const fetchApplies = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/applies`); // Rota para obter todos os usuários
-      setApplies(response.data);
+      const token = await getAuthToken();
+      
+      if (token) {
+        const response = await axios.get(`${API_BASE_URL}/applies/?token=${token}`); 
+        setApplies(response.data);
+      } else {
+        console.error('Token de autenticação ausente ou inválido.');
+      }
     } catch (error) {
-      console.error("Erro ao buscar aplicações:", error);
+      console.error("Erro ao buscar processos seletivos:", error);
+    }
+  };
+
+  const fetchApplyTests = async () => {
+    try {
+      const token = await getAuthToken();
+
+      if (token) {
+        const response = await axios.get(`${API_BASE_URL}/applies/${selectedApply.id}/tests/?token=${token}`);
+
+        if (response.status === 200) {
+          const testsData = response.data;
+
+          const savedTests = testsData.map((test) => ({
+            ...test,
+            isNew: false, // Por padrão, define-se como false
+          }));
+          setSelectedTests(savedTests);
+        } else {
+          console.log("Erro ao buscar a lista de testes");
+        }
+      } else {
+        console.error('Token de autenticação ausente ou inválido.');
+      }        
+    } catch (error) {
+      console.error("Erro ao buscar testes:", error);
     }
   };
 
   const fetchTests = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/tests_can_copy`);
-      setTests(response.data);
+      const token = await getAuthToken();
+
+      if (token) {
+        const response = await axios.get(`${API_BASE_URL}/tests/?token=${token}`);
+        setTests(response.data);
+      } else {
+        console.error('Token de autenticação ausente ou inválido.');
+      }        
     } catch (error) {
       console.error("Erro ao buscar testes:", error);
     }
@@ -105,8 +155,14 @@ function Applies() {
 
   const fetchCandidate = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/people/1`);
-      setCandidates(response.data);
+      const token = await getAuthToken();
+
+      if (token) {
+        const response = await axios.get(`${API_BASE_URL}/candidates/?token=${token}`);
+        setCandidates(response.data);
+      } else {
+        console.error('Token de autenticação ausente ou inválido.');
+      }  
     } catch (error) {
       console.error("Erro ao buscar candidatos:", error);
     }
@@ -114,8 +170,14 @@ function Applies() {
 
   const fetchRecruiter = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/people/0`);
-      setRecruiters(response.data);
+      const token = await getAuthToken();
+
+      if (token) {
+        const response = await axios.get(`${API_BASE_URL}/recruiters/?token=${token}`);
+        setRecruiters(response.data);
+      } else {
+        console.error('Token de autenticação ausente ou inválido.');
+      }  
     } catch (error) {
       console.error("Erro ao buscar recrutadores:", error);
     }
@@ -133,28 +195,78 @@ function Applies() {
   };
 
   const handleTestSelection = (testId) => {
-    setSelectedTests([...selectedTests, testId]);
-    toggleTestModal(); // Fechar o modal após a seleção
+    const selectedTest = tests.find((test) => test.id === testId);
+
+    if (selectedTest) {
+      // Move o teste da lista de testes disponíveis para a lista de testes selecionados
+      setTests(tests.filter((test) => test.id !== testId));
+      selectedTest.isNew = true;
+      setSelectedTests([...selectedTests, selectedTest]);
+    }
+  };
+
+  const handleDeselectTest = (testId) => {
+    const deselectedTest = selectedTests.find((test) => test.id === testId);
+
+    if (deselectedTest) {
+      // Move o teste da lista de testes selecionados para a lista de testes disponíveis
+      setSelectedTests(selectedTests.filter((test) => test.id !== testId));
+      deselectedTest.isNew = false;
+      setTests([...tests, deselectedTest]);
+    }
   };
 
   const handleCreateApply = async () => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/createApply`, {
-        start_date: dateStart,
-        finish_date: dateFinish,
-        comment: newApply.comment,
-        recruiter_id: selectedRecruiter,
-        candidate_id: selectedCandidate,
-      });
-      console.log(response);
-      if (response.data.success) {
-        setIsModalVisible(false);
-        setNewApply({ start_date: "", finish_date: "", comment: "" }); // Limpar os campos do formulário
-        fetchApplies(); // Atualizar a lista
+      const token = await getAuthToken();
+
+      if (token) {
+        // const newTestIds = [];
+
+        // selectedTests?.forEach((test) => {
+        //   newTestIds = selectedTests?.map((test) => test.id) ?? [];
+        // });
+        
+        const requestData = { apply: {
+          start_date: dateStart,
+          finish_date: dateFinish,
+          comment: newApply.comment,
+          recruiter_id: selectedRecruiter,
+          candidate_id: selectedCandidate,
+          tests: selectedTests, // Inclua os IDs dos testes recém-selecionados
+        }};
+        console.log(requestData);
+
+        const response = await axios.post(
+          `${API_BASE_URL}/applies/?token=${token}`,
+          requestData
+        );
+
+
+        if (response.status === 201) {
+          setIsModalVisible(false);
+          setNewApply({ start_date: "", finish_date: "", comment: "" });
+          fetchApplies();
+
+          // Limpar os campos do formulário
+          setSelectedCandidate(null);
+          setSelectedRecruiter(null);
+
+          // Mover todos os questionários selecionados de volta para a lista de disponíveis
+          // selectedTests?.forEach((test) => {
+          //   handleDeselectTest(test.id);
+          // });
+        } else {
+          console.log("Erro ao criar aplicação:", response.data.message);
+        }
       } else {
-        console.log("Erro ao criar aplicação:", response.data.message);
-      }
+        console.error('Token de autenticação ausente ou inválido.');
+      }  
     } catch (error) {
+      fetchApplies();
+      setSelectedCandidate(null);
+      setSelectedRecruiter(null);
+      // setSelectedTests(null);
       console.error("Erro ao criar aplicação:", error.message);
     }
   };
@@ -162,22 +274,29 @@ function Applies() {
   const handleEditModalVisible = (isVisible, apply) => {
     setEditModalVisible(isVisible);
     setSelectedApply(apply);
+    fetchApplyTests();
     setSelectedCandidate(apply.candidate_id);
     setSelectedRecruiter(apply.recruiter_id);
   };
 
   const handleEditApply = async () => {
     try {
-      await axios.put(`${API_BASE_URL}/updateApply/${selectedApply.apply_id}`, {
-        start_date: selectedApply.start_date,
-        finish_date: selectedApply.finish_date,
-        comment: selectedApply.comment,
-        recruiter_id: selectedRecruiter,
-        candidate_id: selectedCandidate,
-      });
-      fetchApplies();
-      setEditModalVisible(false);
-      setSelectedApply(null);
+      const token = await getAuthToken();
+
+      if (token) {
+        await axios.put(`${API_BASE_URL}/applies/${selectedApply.id}/?token=${token}`, {
+          start_date: selectedApply.start_date,
+          finish_date: selectedApply.finish_date,
+          comment: selectedApply.comment,
+          recruiter_id: selectedRecruiter,
+          candidate_id: selectedCandidate,
+        });
+        fetchApplies();
+        setEditModalVisible(false);
+        setSelectedApply(null);
+      } else {
+        console.error('Token de autenticação ausente ou inválido.');
+      } 
     } catch (error) {
       console.error("Erro ao atualizar aplicação:", error);
     }
@@ -190,17 +309,20 @@ function Applies() {
 
   const handleDeleteApply = async () => {
     try {
-      const response = await axios.delete(
-        `${API_BASE_URL}/deleteApply/${selectedApply.apply_id}`,
-        selectedApply
-      );
-      if (response.data.success) {
-        fetchApplies(); // Atualiza a lista de usuários após a exclusão
-        setDeleteModalVisible(false);
-        setSelectedApply(null);
+      const token = await getAuthToken();
+
+      if (token) {
+        const response = await axios.delete(`${API_BASE_URL}/applies/${selectedApply.id}`);
+        if (response.data.success) {
+          fetchApplies(); // Atualiza a lista de usuários após a exclusão
+          setDeleteModalVisible(false);
+          setSelectedApply(null);
+        } else {
+          console.log("Erro ao criar aplicação:", response.data.message);
+        }
       } else {
-        console.log("Erro ao criar aplicação:", response.data.message);
-      }
+        console.error('Token de autenticação ausente ou inválido.');
+      } 
     } catch (error) {
       console.error("Erro ao atualizar aplicação:", error);
     }
@@ -221,15 +343,15 @@ function Applies() {
       <View style={styles.container}>
         <FlatList
           data={applies}
-          keyExtractor={(item) => item.apply_id.toString()}
+          keyExtractor={(item) => item.id.toString()}
           renderItem={({ item }) => (
             <View style={styles.applyItem}>
               <View style={styles.applyInfo}>
                 <Text style={styles.primary}>
-                  Candidato: {item.candidateName}
+                  Candidato: {item.candidate_name}
                 </Text>
                 <Text style={styles.primary}>
-                  Recrutador: {item.recruiterName}
+                  Recrutador: {item.recruiter_name}
                 </Text>
                 <Text style={styles.secundary}>{item.comment}</Text>
               </View>
@@ -275,9 +397,9 @@ function Applies() {
                 <Picker.Item label="Selecione o recrutador" value={null} />
                 {recruiters.map((recruiter) => (
                   <Picker.Item
-                    key={recruiter.person_id}
+                    key={recruiter.id}
                     label={recruiter.name}
-                    value={recruiter.person_id}
+                    value={recruiter.id}
                   />
                 ))}
               </Picker>
@@ -290,9 +412,9 @@ function Applies() {
                 <Picker.Item label="Selecione o candidato" value={null} />
                 {candidates.map((candidate) => (
                   <Picker.Item
-                    key={candidate.person_id}
+                    key={candidate.id}
                     label={candidate.name}
-                    value={candidate.person_id}
+                    value={candidate.id}
                   />
                 ))}
               </Picker>
@@ -363,18 +485,10 @@ function Applies() {
 
               <View>
                 {/* Lista de testes selecionados */}
-                {selectedTests.map((testId, index) => (
+                {selectedTests.map((test, index) => (
                   <View key={index} style={styles.applyItem}>
-                    <Text>
-                      {tests.find((test) => test.test_id === testId).title}
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() => {
-                        const newSelectedTests = [...selectedTests];
-                        newSelectedTests.splice(index, 1);
-                        setSelectedTests(newSelectedTests);
-                      }}
-                    >
+                    <Text style={test.isNew ? styles.newTest : styles.oldTest}>{test.title}</Text>
+                    <TouchableOpacity onPress={() => handleDeselectTest(test.id)}>
                       <Feather
                         style={styles.actionButtonText}
                         name="delete"
@@ -399,27 +513,18 @@ function Applies() {
                 </TouchableOpacity>
 
                 {/* Modal de seleção de testes */}
-                <Modal
-                  visible={isTestModalVisible}
-                  animationType="fade"
-                  transparent
-                >
+                <Modal visible={isTestModalVisible} animationType="fade" transparent>
                   <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
-                      <Text style={styles.labelName}>
-                        Selecione um questionário:
-                      </Text>
+                      <Text style={styles.labelName}>Selecionar questionários:</Text>
                       <View style={styles.spacing} />
-                      {tests.map((test) => (
-                        <TouchableOpacity
-                          key={test.test_id}
-                          onPress={() => handleTestSelection(test.test_id)}
-                        >
-                          <Text>{test.title}</Text>
-                        </TouchableOpacity>
-                      ))}
+                        {tests.map((test) => (
+                          <TouchableOpacity key={test.id} onPress={() => handleTestSelection(test.id)}>
+                            <Text style={test.isNew ? styles.newTest : styles.oldTest}>{test.title}</Text>
+                          </TouchableOpacity>
+                        ))}
                       <TouchableOpacity onPress={toggleTestModal}>
-                        <Text style={styles.buttonCloseModal}>Cancelar</Text>
+                        <Text style={styles.buttonCloseModal}>Voltar</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -459,9 +564,9 @@ function Applies() {
               <Picker.Item label="Selecione o recrutador" value={null} />
               {recruiters.map((recruiter) => (
                 <Picker.Item
-                  key={recruiter.person_id}
+                  key={recruiter.id}
                   label={recruiter.name}
-                  value={recruiter.person_id}
+                  value={recruiter.id}
                 />
               ))}
             </Picker>
@@ -474,9 +579,9 @@ function Applies() {
               <Picker.Item label="Selecione o candidato" value={null} />
               {candidates.map((candidate) => (
                 <Picker.Item
-                  key={candidate.person_id}
+                  key={candidate.id}
                   label={candidate.name}
-                  value={candidate.person_id}
+                  value={candidate.id}
                 />
               ))}
             </Picker>
@@ -783,6 +888,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
     marginRight: 8,
+  },
+  newTest: {
+    fontWeight: "bold",
+    color: 'green',
+  },
+  oldTest: {
+    fontWeight: "bold",
   },
   spacing: {
     marginBottom: 35,

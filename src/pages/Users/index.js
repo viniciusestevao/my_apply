@@ -15,9 +15,9 @@ import API_BASE_URL from "../../apiConfig"; // Importar a URL base da API
 import { Feather } from '@expo/vector-icons';
 //import Icon from 'react-native-vector-icons';
 
-
 import { Container, Texto } from "../Home/styles";
 import Header from "../../components/Header";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 function Users() {
   const [users, setUsers] = useState([]);
@@ -25,16 +25,35 @@ function Users() {
   const [isModalVisible, setIsModalVisible] = useState(false); // Estado para controlar a visibilidade do modal
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
   const [newUser, setNewUser] = useState({
     username: "",
     password: "",
     email: "",
   });
 
+  const getAuthToken = async () => {
+    try {
+      //console.log("Auth token");
+      const token = await AsyncStorage.getItem('authToken');
+      return token;
+    } catch (error) {
+      console.error('Erro ao recuperar o token de autenticação:', error);
+      return null;
+    }
+  };
+  
+  
   const fetchUsers = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/users`); // Rota para obter todos os usuários
-      setUsers(response.data);
+      const token = await getAuthToken();
+
+      if (token) {
+        const response = await axios.get(`${API_BASE_URL}/users/?token=${token}`); // Rota para obter todos os usuários
+        setUsers(response.data);
+      } else {
+        console.error('Token de autenticação ausente ou inválido.');
+      } 
     } catch (error) {
       console.error("Erro ao buscar usuários:", error);
     }
@@ -46,13 +65,20 @@ function Users() {
 
   const handleCreateUser = async () => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/createUser`, newUser);
-      if (response.data.success) {
-        setIsModalVisible(false); // Fechar o modal após criar o usuário
-        setNewUser({ username: "", password: "", email: "" }); // Limpar os campos do formulário
-        fetchUsers(); // Atualizar a lista de usuários
+      const token = await getAuthToken();
+
+      if (token) {
+        const response = await axios.post(`${API_BASE_URL}/users/?token=${token}`, newUser);
+
+        if (response.status === 201) {
+          setIsModalVisible(false); // Fechar o modal após criar o usuário
+          setNewUser({ username: "", password: "", email: "" }); // Limpar os campos do formulário
+          fetchUsers(); // Atualizar a lista de usuários
+        } else {
+          console.log("Erro ao criar usuário:", response.data.message);
+        }
       } else {
-        console.log("Erro ao criar usuário:", response.data.message);
+        console.error('Token de autenticação ausente ou inválido.');
       }
     } catch (error) {
       console.error("Erro ao criar usuário:", error.message);
@@ -66,13 +92,20 @@ function Users() {
 
   const handleEditUser = async () => {
     try {
-      await axios.put(
-        `${API_BASE_URL}/updateUser/${selectedUser.user_id}`,
-        selectedUser
-      );
-      fetchUsers();
-      setEditModalVisible(false);
-      setSelectedUser(null);
+      const token = await getAuthToken();
+
+      if (token) {
+
+        await axios.put(
+          `${API_BASE_URL}/users/${selectedUser.id}/?token=${token}`,
+          selectedUser
+        );
+        fetchUsers();
+        setEditModalVisible(false);
+        setSelectedUser(null);
+      } else {
+        console.error('Token de autenticação ausente ou inválido.');
+      }
     } catch (error) {
       console.error("Erro ao atualizar usuário:", error);
     }
@@ -81,23 +114,31 @@ function Users() {
   const handleDeleteModalVisible = (isVisible, user) => {
     setDeleteModalVisible(isVisible);
     setSelectedUser(user);
+    setErrorMessage(null);
   };
 
   const handleDeleteUser = async () => {
     try {
-      const response = await axios.delete(
-        `${API_BASE_URL}/deleteUser/${selectedUser.user_id}`,
-        selectedUser
-      );
-      if (response.data.success) {
-        fetchUsers(); // Atualiza a lista de usuários após a exclusão
-        setDeleteModalVisible(false);
-        setSelectedUser(null);
-      } else {
-        console.log("Erro ao criar usuário:", response.data.message);
+      const token = await getAuthToken();
+
+      if (token) {
+        const response = await axios.delete(`${API_BASE_URL}/users/${selectedUser.id}/?token=${token}`);
+        
+        if (response.status === 204) {
+          fetchUsers(); // Atualiza a lista de usuários após a exclusão
+          setDeleteModalVisible(false);
+          setSelectedUser(null);
+        } else {
+          console.log("Erro ao criar usuário:", response.data.message);
+        }
       }
     } catch (error) {
-      console.error("Erro ao atualizar usuário:", error);
+      if (error.response && error.response.data && error.response.data.message) {
+        setErrorMessage(error.response.data.message);
+      } else {
+        setErrorMessage("Erro desconhecido ao excluir o usuário.");
+      }
+      //console.error("Erro ao atualizar usuário:", error);
     }
   };
 
@@ -116,7 +157,7 @@ function Users() {
       <View style={styles.container}>
         <FlatList
           data={users}
-          keyExtractor={(item) => item.user_id.toString()}
+          keyExtractor={(item) => item.id.toString()}
           renderItem={({ item }) => (
             <View style={styles.userItem}>
               <View style={styles.userInfo}>
@@ -256,6 +297,8 @@ function Users() {
             <Text style={styles.modalText}>
               Deseja mesmo remover o usuário?
             </Text>
+            {errorMessage && <Text style={{ color: 'red', marginBottom: 16 }}>{errorMessage}</Text>}
+
             <View style={styles.modalButtonGroup}>
               <TouchableOpacity
                 onPress={handleDeleteUser}

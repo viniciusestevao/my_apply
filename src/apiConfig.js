@@ -1,3 +1,3 @@
-const API_BASE_URL = 'http://192.168.1.107:3000'; // Mudar depois para o Azure
+const API_BASE_URL = 'https://4ed3-2804-14c-3b01-8f0d-ecc1-1a8d-84c9-2e46.ngrok-free.app'; 
 
 export default API_BASE_URL;

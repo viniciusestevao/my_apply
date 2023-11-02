@@ -19,6 +19,8 @@ import { Picker } from "@react-native-picker/picker";
 
 import { Container, Texto } from "../Home/styles";
 import Header from "../../components/Header";
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 
 function Candidate() {
   const [users, setUsers] = useState([]);
@@ -75,13 +77,26 @@ function Candidate() {
     return `${day}/${month}/${year}`;
   }
 
+  const getAuthToken = async () => {
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      return token;
+    } catch (error) {
+      console.error('Erro ao recuperar o token de autenticação:', error);
+      return null;
+    }
+  };
+
   const fetchPeople = async () => {
     try {
-      const response = await axios.get(
-        `${API_BASE_URL}/people/1`,
-        selectedPerson
-      ); // Rota para obter todos os candidatos
-      setPeople(response.data);
+      const token = await getAuthToken();
+      
+      if (token) {
+        const response = await axios.get(`${API_BASE_URL}/candidates/?token=${token}`); // Rota para obter todos os candidatos
+        setPeople(response.data);
+      } else {
+        console.error('Token de autenticação ausente ou inválido.');
+      }
     } catch (error) {
       console.error("Erro ao buscar candidatos:", error);
     }
@@ -94,29 +109,36 @@ function Candidate() {
 
   const handleCreatePeople = async () => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/createPeople`, {
-        name: newPeople.name,
-        doc_rg: newPeople.doc_rg,
-        doc_cpf: newPeople.doc_cpf,
-        birth_date: newPeople.birth_date,
-        phone_1: newPeople.phone_1,
-        phone_2: newPeople.phone_2,
-        email: newPeople.email,
-        address_description: newPeople.address_description,
-        address_number: newPeople.address_number,
-        neighborhood: newPeople.neighborhood,
-        city: newPeople.city,
-        state: newPeople.state,
-        CEP: newPeople.CEP,
-        user_id: selectedUser,
-        is_candidate: 1,
-      });
-      if (response.data.success) {
-        setIsModalVisible(false); // Fechar o modal após criar o usuário
-        setNewPeople({ user_id: "", name: "", doc_rg: "", doc_cpf: "", birth_date: "", phone_1: "", phone_2: "", address_description: "", address_number: "", neighborhood: "", city: "", state: "", CEP: "", is_candidate: "" }); // Limpar os campos do formulário
-        fetchPeople();  // Atualizar a lista de usuários
-      } else { 
-        console.log("Erro ao criar candidato:", response.data.message);
+      const token = await getAuthToken();
+
+      if (token) {
+        const response = await axios.post(`${API_BASE_URL}/candidates/?token=${token}`, {
+          name: newPeople.name,
+          doc_rg: newPeople.doc_rg,
+          doc_cpf: newPeople.doc_cpf,
+          birth_date: newPeople.birth_date,
+          phone_1: newPeople.phone_1,
+          phone_2: newPeople.phone_2,
+          email: newPeople.email,
+          address_description: newPeople.address_description,
+          address_number: newPeople.address_number,
+          neighborhood: newPeople.neighborhood,
+          city: newPeople.city,
+          state: newPeople.state,
+          CEP: newPeople.CEP,
+          user_id: selectedUser,
+          is_candidate: 1,
+        });
+        if (response.status === 201) {
+          setIsModalVisible(false); // Fechar o modal após criar o candidato
+          setNewPeople({ id: "", user_id: "", name: "", doc_rg: "", doc_cpf: "", birth_date: "", phone_1: "", phone_2: "", address_description: "", address_number: "", neighborhood: "", city: "", state: "", CEP: "", is_candidate: "" }); // Limpar os campos do formulário
+          fetchPeople();  // Atualizar a lista de candidatos
+          setSelectedUser(null);
+        } else {
+          console.log("Erro ao criar candidato:", response.data.message);
+        }
+      } else {
+        console.error('Token de autenticação ausente ou inválido.');
       }
     } catch (error) {
       console.error("Erro ao criar candidato:", error.message);
@@ -131,29 +153,35 @@ function Candidate() {
 
   const handleEditPeople = async () => {
     try {
-      await axios.put(
-        `${API_BASE_URL}/updatePeople/${selectedPerson.person_id}`, {
-          name: selectedPerson.name,
-          doc_rg: selectedPerson.doc_rg,
-          doc_cpf: selectedPerson.doc_cpf,
-          birth_date: selectedPerson.birth_date,
-          phone_1: selectedPerson.phone_1,
-          phone_2: selectedPerson.phone_2,
-          email: selectedPerson.email,
-          address_description: selectedPerson.address_description,
-          address_number: selectedPerson.address_number,
-          neighborhood: selectedPerson.neighborhood,
-          city: selectedPerson.city,
-          state: selectedPerson.state,
-          CEP: selectedPerson.CEP,
-          user_id: selectedUser,
-          is_candidate: 1,
-        });
-      setNewPeople({ user_id: "", name: "", doc_rg: "", doc_cpf: "", birth_date: "", phone_1: "", phone_2: "", address_description: "", address_number: "", neighborhood: "", city: "", state: "", CEP: "", is_candidate: "" }); // Limpar os campos do formulário
-        
-      fetchPeople();
-      setEditModalVisible(false);
-      setSelectedPerson(null);
+      const token = await getAuthToken();
+      if (token) {
+        //console.log(selectedUser);
+        await axios.put(
+          `${API_BASE_URL}/candidates/${selectedPerson.id}/?token=${token}`, {
+            name: selectedPerson.name,
+            doc_rg: selectedPerson.doc_rg,
+            doc_cpf: selectedPerson.doc_cpf,
+            birth_date: selectedPerson.birth_date,
+            phone_1: selectedPerson.phone_1,
+            phone_2: selectedPerson.phone_2,
+            email: selectedPerson.email,
+            address_description: selectedPerson.address_description,
+            address_number: selectedPerson.address_number,
+            neighborhood: selectedPerson.neighborhood,
+            city: selectedPerson.city,
+            state: selectedPerson.state,
+            CEP: selectedPerson.CEP,
+            user_id: selectedUser,
+            is_candidate: 1,
+          });
+        setNewPeople({ id: "", name: "", doc_rg: "", doc_cpf: "", birth_date: "", phone_1: "", phone_2: "", address_description: "", address_number: "", neighborhood: "", city: "", state: "", CEP: "", is_candidate: "" }); // Limpar os campos do formulário
+
+        fetchPeople();
+        setEditModalVisible(false);
+        setSelectedPerson(null);
+      } else {
+        console.error('Token de autenticação ausente ou inválido.');
+      } 
     } catch (error) {
       console.error("Erro ao atualizar candidato:", error);
     }
@@ -166,30 +194,40 @@ function Candidate() {
 
   const handleDeletePeople = async () => {
     try {
-      const response = await axios.delete(
-        `${API_BASE_URL}/deletePeople/${selectedPerson.person_id}`,
-        {
-          data: { is_candidate: 1 },
+      const token = await getAuthToken();
+      if (token) {
+        //console.log(selectedPerson.id);
+        const response = await axios.delete(`${API_BASE_URL}/candidates/${selectedPerson.id}/?token=${token}`);
+
+        if (response.status === 204) {
+          fetchPeople(); // Atualiza a lista de candidatos após a exclusão
+          setDeleteModalCandidateVisible(false);
+          setSelectedPerson(null);
+        } else {
+          fetchPeople();
+          console.log("Erro ao remover candidato:", response.data.message);
         }
-      );
-      if (response.data.success) {
-        fetchPeople(); // Atualiza a lista de candidatos após a exclusão
-        setDeleteModalCandidateVisible(false);
-        setSelectedPerson(null);
       } else {
-        console.log("Erro ao criar candidato:", response.data.message);
-      }
+        console.error('Token de autenticação ausente ou inválido.');
+      } 
     } catch (error) {
-      console.error("Erro ao atualizar candidato:", error);
+      fetchPeople();
+      console.error("Erro ao remover candidato:", error);
     }
   };
 
   const fetchUsers = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/users`);
-      setUsers(response.data);
+      const token = await getAuthToken();
+
+      if (token) {
+        const response = await axios.get(`${API_BASE_URL}/users/?token=${token}`);
+        setUsers(response.data);
+      } else {
+        console.error('Token de autenticação ausente ou inválido.');
+      } 
     } catch (error) {
-      console.error("Erro ao buscar candidatos:", error);
+      console.error("Erro ao buscar usuários:", error);
     }
   };
 
@@ -208,7 +246,7 @@ function Candidate() {
       <View style={styles.container}>
         <FlatList
           data={people}
-          keyExtractor={(item) => item.person_id.toString()}
+          keyExtractor={(item) => item.id.toString()}
           renderItem={({ item }) => (
             <View style={styles.peopleItem}>
               <View style={styles.peopleInfo}>
@@ -295,7 +333,7 @@ function Candidate() {
                     <DatePicker
                       mode="calendar"
                       minimumDate={startDate} // Usar a variável startDate ao invés de "startDate"
-                      selected={new Date(date)} // Converter a string 'date' para um objeto Date
+                      selected={date} // Converter a string 'date' para um objeto Date
                       onDateChange={handleDateChange} // Usar a função handleDateChange
                       minDate={new Date("02-01-1950")}
                     />
@@ -395,21 +433,13 @@ function Candidate() {
                 <Picker.Item label="Selecione um usuário" value={null} />
                 {users.map((user) => (
                   <Picker.Item
-                    key={user.user_id}
+                    key={user.id}
                     label={user.username + " - " + user.email}
-                    value={user.user_id}
+                    value={user.id}
                   />
                 ))}
               </Picker>
 
-              {/*  <TextInput
-                hidden
-                value={newPeople.user_id}
-                onChangeText={(text) =>
-                  setNewPeople({ ...newPeople, user_id: text })
-                }
-              />
-              */}
               <View style={styles.modalButtonGroup}>
                 <Button
                   title="Salvar"
@@ -477,7 +507,7 @@ function Candidate() {
                     <DatePicker
                       mode="calendar"
                       minimumDate={startDate} // Usar a variável startDate ao invés de "startDate"
-                      selected={new Date(date)} // Converter a string 'date' para um objeto Date
+                      selected={date} // Converter a string 'date' para um objeto Date
                       onDateChange={handleDateChange} // Usar a função handleDateChange
                       minDate={new Date("02-01-1950")}
                     />
@@ -580,9 +610,9 @@ function Candidate() {
                 <Picker.Item label="Selecione um usuário" value={null} />
                 {users.map((user) => (
                   <Picker.Item
-                    key={user.user_id}
+                    key={user.id}
                     label={user.username + " - " + user.email}
-                    value={user.user_id}
+                    value={user.id}
                   />
                 ))}
               </Picker>
@@ -649,8 +679,7 @@ function Recruiter({ personType }) {
   const [users, setUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState([]);
   const [people, setPeople] = useState([]);
-  const [deleteModalCandidateVisible, setDeleteModalCandidateVisible] =
-    useState(false);
+  const [deleteModalCandidateVisible, setDeleteModalCandidateVisible] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false); // Estado para controlar a visibilidade do modal
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState(null);
@@ -668,7 +697,7 @@ function Recruiter({ personType }) {
     city: "",
     state: "",
     CEP: "",
-    user_id: "",
+    id: "",
     is_candidate: "",
   });
 
@@ -701,15 +730,28 @@ function Recruiter({ personType }) {
     return `${day}/${month}/${year}`;
   }
 
+  const getAuthToken = async () => {
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      return token;
+    } catch (error) {
+      console.error('Erro ao recuperar o token de autenticação:', error);
+      return null;
+    }
+  };
+
   const fetchPeople = async () => {
     try {
-      const response = await axios.get(
-        `${API_BASE_URL}/people/0`,
-        selectedPerson
-      ); // Rota para obter todos os candidatos
-      setPeople(response.data);
+      const token = await getAuthToken();
+      console.log(token);
+      if (token) {
+        const response = await axios.get(`${API_BASE_URL}/recruiters/?token=${token}`); // Rota para obter todos os recrutadores
+        setPeople(response.data);
+      } else {
+        console.error('Token de autenticação ausente ou inválido.');
+      }
     } catch (error) {
-      console.error("Erro ao buscar candidatos:", error);
+      console.error("Erro ao buscar recrutadores:", error);
     }
   };
 
@@ -720,32 +762,39 @@ function Recruiter({ personType }) {
 
   const handleCreatePeople = async () => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/createPeople`, {
-        name: newPeople.name,
-        doc_rg: newPeople.doc_rg,
-        doc_cpf: newPeople.doc_cpf,
-        birth_date: newPeople.birth_date,
-        phone_1: newPeople.phone_1,
-        phone_2: newPeople.phone_2,
-        email: newPeople.email,
-        address_description: newPeople.address_description,
-        address_number: newPeople.address_number,
-        neighborhood: newPeople.neighborhood,
-        city: newPeople.city,
-        state: newPeople.state,
-        CEP: newPeople.CEP,
-        user_id: selectedUser,
-        is_candidate: 0,
-      });
-      if (response.data.success) {
-        setIsModalVisible(false); // Fechar o modal após criar o usuário
-        setNewPeople({ user_id: "", name: "", doc_rg: "", doc_cpf: "", birth_date: "", phone_1: "", phone_2: "", address_description: "", address_number: "", neighborhood: "", city: "", state: "", CEP: "", is_candidate: "" }); // Limpar os campos do formulário
-        fetchPeople();  // Atualizar a lista de usuários
-      } else { 
-        console.log("Erro ao criar candidato:", response.data.message);
+      const token = await getAuthToken();
+
+      if (token) {
+        const response = await axios.post(`${API_BASE_URL}/recruiters/?token=${token}`, {
+          name: newPeople.name,
+          doc_rg: newPeople.doc_rg,
+          doc_cpf: newPeople.doc_cpf,
+          birth_date: newPeople.birth_date,
+          phone_1: newPeople.phone_1,
+          phone_2: newPeople.phone_2,
+          email: newPeople.email,
+          address_description: newPeople.address_description,
+          address_number: newPeople.address_number,
+          neighborhood: newPeople.neighborhood,
+          city: newPeople.city,
+          state: newPeople.state,
+          CEP: newPeople.CEP,
+          user_id: selectedUser,
+          is_candidate: 0,
+        });
+        if (response.status === 201) {
+          setIsModalVisible(false); // Fechar o modal após criar o recrutador
+          setNewPeople({ id: "", user_id: "", name: "", doc_rg: "", doc_cpf: "", birth_date: "", phone_1: "", phone_2: "", address_description: "", address_number: "", neighborhood: "", city: "", state: "", CEP: "", is_candidate: "" }); // Limpar os campos do formulário
+          fetchPeople();  // Atualizar a lista de recrutadores
+          setSelectedUser(null);
+        } else {
+          console.log("Erro ao criar recrutador:", response.data.message);
+        }
+      } else {
+        console.error('Token de autenticação ausente ou inválido.');
       }
     } catch (error) {
-      console.error("Erro ao criar candidato:", error.message);
+      console.error("Erro ao criar recrutador:", error.message);
     }
   };
 
@@ -757,31 +806,37 @@ function Recruiter({ personType }) {
 
   const handleEditPeople = async () => {
     try {
-      await axios.put(
-        `${API_BASE_URL}/updatePeople/${selectedPerson.person_id}`, {
-          name: selectedPerson.name,
-          doc_rg: selectedPerson.doc_rg,
-          doc_cpf: selectedPerson.doc_cpf,
-          birth_date: selectedPerson.birth_date,
-          phone_1: selectedPerson.phone_1,
-          phone_2: selectedPerson.phone_2,
-          email: selectedPerson.email,
-          address_description: selectedPerson.address_description,
-          address_number: selectedPerson.address_number,
-          neighborhood: selectedPerson.neighborhood,
-          city: selectedPerson.city,
-          state: selectedPerson.state,
-          CEP: selectedPerson.CEP,
-          user_id: selectedUser,
-          is_candidate: 0,
-        });
-      setNewPeople({ user_id: "", name: "", doc_rg: "", doc_cpf: "", birth_date: "", phone_1: "", phone_2: "", address_description: "", address_number: "", neighborhood: "", city: "", state: "", CEP: "", is_candidate: "" }); // Limpar os campos do formulário
-        
-      fetchPeople();
-      setEditModalVisible(false);
-      setSelectedPerson(null);
+      const token = await getAuthToken();
+      if (token) {
+        //console.log(selectedUser);
+        await axios.put(
+          `${API_BASE_URL}/recruiters/${selectedPerson.id}/?token=${token}`, {
+            name: selectedPerson.name,
+            doc_rg: selectedPerson.doc_rg,
+            doc_cpf: selectedPerson.doc_cpf,
+            birth_date: selectedPerson.birth_date,
+            phone_1: selectedPerson.phone_1,
+            phone_2: selectedPerson.phone_2,
+            email: selectedPerson.email,
+            address_description: selectedPerson.address_description,
+            address_number: selectedPerson.address_number,
+            neighborhood: selectedPerson.neighborhood,
+            city: selectedPerson.city,
+            state: selectedPerson.state,
+            CEP: selectedPerson.CEP,
+            user_id: selectedUser,
+            is_candidate: 0,
+          });
+        setNewPeople({ id: "", name: "", doc_rg: "", doc_cpf: "", birth_date: "", phone_1: "", phone_2: "", address_description: "", address_number: "", neighborhood: "", city: "", state: "", CEP: "", is_candidate: "" }); // Limpar os campos do formulário
+
+        fetchPeople();
+        setEditModalVisible(false);
+        setSelectedPerson(null);
+      } else {
+        console.error('Token de autenticação ausente ou inválido.');
+      } 
     } catch (error) {
-      console.error("Erro ao atualizar candidato:", error);
+      console.error("Erro ao atualizar recrutador:", error);
     }
   };
 
@@ -792,36 +847,46 @@ function Recruiter({ personType }) {
 
   const handleDeletePeople = async () => {
     try {
-      const response = await axios.delete(
-        `${API_BASE_URL}/deletePeople/${selectedPerson.person_id}`,
-        {
-          data: { is_candidate: 0 },
+      const token = await getAuthToken();
+      if (token) {
+        //console.log(selectedPerson.id);
+        const response = await axios.delete(`${API_BASE_URL}/recruiters/${selectedPerson.id}/?token=${token}`);
+
+        if (response.status === 204) {
+          fetchPeople(); // Atualiza a lista de recrutadores após a exclusão
+          setDeleteModalCandidateVisible(false);
+          setSelectedPerson(null);
+        } else {
+          fetchPeople();
+          console.log("Erro ao remover recrutador:", response.data.message);
         }
-      );
-      if (response.data.success) {
-        fetchPeople(); // Atualiza a lista de candidatos após a exclusão
-        setDeleteModalCandidateVisible(false);
-        setSelectedPerson(null);
       } else {
-        console.log("Erro ao criar candidato:", response.data.message);
-      }
+        console.error('Token de autenticação ausente ou inválido.');
+      } 
     } catch (error) {
-      console.error("Erro ao atualizar candidato:", error);
+      fetchPeople();
+      console.error("Erro ao atualizar recrutador:", error);
     }
   };
 
   const fetchUsers = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/users`);
-      setUsers(response.data);
+      const token = await getAuthToken();
+
+      if (token) {
+        const response = await axios.get(`${API_BASE_URL}/users/?token=${token}`);
+        setUsers(response.data);
+      } else {
+        console.error('Token de autenticação ausente ou inválido.');
+      } 
     } catch (error) {
-      console.error("Erro ao buscar candidatos:", error);
+      console.error("Erro ao buscar usuários:", error);
     }
   };
 
   return (
     <Container>
-      <Header title="Candidatos" />
+      <Header title="Recrutador" />
       <Texto>Lista de recrutadores cadastrados</Texto>
 
       <TouchableOpacity
@@ -834,7 +899,7 @@ function Recruiter({ personType }) {
       <View style={styles.container}>
         <FlatList
           data={people}
-          keyExtractor={(item) => item.person_id.toString()}
+          keyExtractor={(item) => item.id.toString()}
           renderItem={({ item }) => (
             <View style={styles.peopleItem}>
               <View style={styles.peopleInfo}>
@@ -1021,9 +1086,9 @@ function Recruiter({ personType }) {
                 <Picker.Item label="Selecione um usuário" value={null} />
                 {users.map((user) => (
                   <Picker.Item
-                    key={user.user_id}
+                    key={user.id}
                     label={user.username + " - " + user.email}
-                    value={user.user_id}
+                    value={user.id}
                   />
                 ))}
               </Picker>
@@ -1198,9 +1263,9 @@ function Recruiter({ personType }) {
                 <Picker.Item label="Selecione um usuário" value={null} />
                 {users.map((user) => (
                   <Picker.Item
-                    key={user.user_id}
+                    key={user.id}
                     label={user.username + " - " + user.email}
-                    value={user.user_id}
+                    value={user.id}
                   />
                 ))}
               </Picker>
