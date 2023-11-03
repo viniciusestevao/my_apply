@@ -112,29 +112,31 @@ function Applies() {
     }
   };
 
-  const fetchApplyTests = async () => {
+  const fetchApplyTests = async (apply_id) => {
     try {
       const token = await getAuthToken();
 
       if (token) {
-        const response = await axios.get(`${API_BASE_URL}/applies/${selectedApply.id}/tests/?token=${token}`);
+        // console.log(selectedApply);
+        const response = await axios.get(`${API_BASE_URL}/applies/${apply_id}/tests/?token=${token}`);
 
         if (response.status === 200) {
-          const testsData = response.data;
-
-          const savedTests = testsData.map((test) => ({
-            ...test,
-            isNew: false, // Por padrão, define-se como false
-          }));
-          setSelectedTests(savedTests);
+          const fetchedTests = response.data;
+          
+          const savedTests = fetchedTests.filter((test) => test.status === 3); // Filtrar testes com status 3 (Saved)
+          const availableTests = fetchedTests.filter((test) => test.status === 1); // Filtrar testes com status 1 (Available)
+         
+          setSelectedTests(savedTests); // Atualizar selectedTests com testes salvos (status 3)
+          
+          setTests(availableTests); // Atualizar tests com testes disponíveis (status 1)
         } else {
-          console.log("Erro ao buscar a lista de testes");
+          console.log("Erro ao buscar a lista de testes dessa aplicação");
         }
       } else {
         console.error('Token de autenticação ausente ou inválido.');
       }        
     } catch (error) {
-      console.error("Erro ao buscar testes:", error);
+      console.error("Erro ao buscar testes dessa aplicação:", error);
     }
   };
 
@@ -144,7 +146,13 @@ function Applies() {
 
       if (token) {
         const response = await axios.get(`${API_BASE_URL}/tests/?token=${token}`);
-        setTests(response.data);
+
+        const availableTests = response.data.map((test) => ({
+          ...test,
+          status: 1, // STATUS: 1 - Available, 2 - Included, 3 - Saved, 4 - Removed
+        }));
+
+        setTests(availableTests);
       } else {
         console.error('Token de autenticação ausente ou inválido.');
       }        
@@ -194,13 +202,14 @@ function Applies() {
     setIsTestModalVisible(!isTestModalVisible);
   };
 
-  const handleTestSelection = (testId) => {
+  const handleSelectTest = (testId) => {
     const selectedTest = tests.find((test) => test.id === testId);
 
     if (selectedTest) {
       // Move o teste da lista de testes disponíveis para a lista de testes selecionados
       setTests(tests.filter((test) => test.id !== testId));
-      selectedTest.isNew = true;
+      console.log(selectedTest.status);
+      selectedTest.status = selectedTest.status === 1 ? 2 : 3;  // Se estiver disponível muda para incluído, senão muda de removido para salvo
       setSelectedTests([...selectedTests, selectedTest]);
     }
   };
@@ -211,7 +220,8 @@ function Applies() {
     if (deselectedTest) {
       // Move o teste da lista de testes selecionados para a lista de testes disponíveis
       setSelectedTests(selectedTests.filter((test) => test.id !== testId));
-      deselectedTest.isNew = false;
+      console.log(deselectedTest.status);
+      deselectedTest.status = deselectedTest.status === 2 ? 1 : 4; // Se estiver incluído muda para disponível, senão muda de salvo para removido
       setTests([...tests, deselectedTest]);
     }
   };
@@ -221,11 +231,6 @@ function Applies() {
       const token = await getAuthToken();
 
       if (token) {
-        // const newTestIds = [];
-
-        // selectedTests?.forEach((test) => {
-        //   newTestIds = selectedTests?.map((test) => test.id) ?? [];
-        // });
         
         const requestData = { apply: {
           start_date: dateStart,
@@ -233,29 +238,27 @@ function Applies() {
           comment: newApply.comment,
           recruiter_id: selectedRecruiter,
           candidate_id: selectedCandidate,
+          },
           tests: selectedTests, // Inclua os IDs dos testes recém-selecionados
-        }};
-        console.log(requestData);
+        };
 
         const response = await axios.post(
           `${API_BASE_URL}/applies/?token=${token}`,
           requestData
         );
 
-
         if (response.status === 201) {
           setIsModalVisible(false);
           setNewApply({ start_date: "", finish_date: "", comment: "" });
           fetchApplies();
-
-          // Limpar os campos do formulário
           setSelectedCandidate(null);
           setSelectedRecruiter(null);
-
+          
+          console.log(selectedTests);
           // Mover todos os questionários selecionados de volta para a lista de disponíveis
-          // selectedTests?.forEach((test) => {
-          //   handleDeselectTest(test.id);
-          // });
+          selectedTests?.forEach((test) => {
+            handleDeselectTest(test.id);
+          });
         } else {
           console.log("Erro ao criar aplicação:", response.data.message);
         }
@@ -274,7 +277,7 @@ function Applies() {
   const handleEditModalVisible = (isVisible, apply) => {
     setEditModalVisible(isVisible);
     setSelectedApply(apply);
-    fetchApplyTests();
+    fetchApplyTests(apply.id);
     setSelectedCandidate(apply.candidate_id);
     setSelectedRecruiter(apply.recruiter_id);
   };
@@ -284,16 +287,29 @@ function Applies() {
       const token = await getAuthToken();
 
       if (token) {
-        await axios.put(`${API_BASE_URL}/applies/${selectedApply.id}/?token=${token}`, {
+
+        const requestData = { apply: {
           start_date: selectedApply.start_date,
           finish_date: selectedApply.finish_date,
           comment: selectedApply.comment,
           recruiter_id: selectedRecruiter,
           candidate_id: selectedCandidate,
-        });
-        fetchApplies();
+          },
+          tests: selectedTests, // Inclua os IDs dos testes recém-selecionados
+        };
+
+        await axios.put(`${API_BASE_URL}/applies/${selectedApply.id}/?token=${token}`, requestData);
+        setNewApply({ start_date: "", finish_date: "", comment: "" });
         setEditModalVisible(false);
         setSelectedApply(null);
+
+        fetchApplies();
+        setSelectedCandidate(null);
+        setSelectedRecruiter(null);
+        
+        console.log(selectedTests);
+        setSelectedTests(null);
+        fetchTests();
       } else {
         console.error('Token de autenticação ausente ou inválido.');
       } 
@@ -312,19 +328,20 @@ function Applies() {
       const token = await getAuthToken();
 
       if (token) {
-        const response = await axios.delete(`${API_BASE_URL}/applies/${selectedApply.id}`);
-        if (response.data.success) {
+        const response = await axios.delete(`${API_BASE_URL}/applies/${selectedApply.id}/?token=${token}`);
+
+        if (response.status === 204) {
           fetchApplies(); // Atualiza a lista de usuários após a exclusão
           setDeleteModalVisible(false);
           setSelectedApply(null);
         } else {
-          console.log("Erro ao criar aplicação:", response.data.message);
+          console.log("Erro ao remover aplicação:", response.data.message);
         }
       } else {
         console.error('Token de autenticação ausente ou inválido.');
       } 
     } catch (error) {
-      console.error("Erro ao atualizar aplicação:", error);
+      console.error("Erro ao remover aplicação:", error);
     }
   };
 
@@ -348,10 +365,10 @@ function Applies() {
             <View style={styles.applyItem}>
               <View style={styles.applyInfo}>
                 <Text style={styles.primary}>
-                  Candidato: {item.candidate_name}
+                  Candidato: {item.candidate.name}
                 </Text>
                 <Text style={styles.primary}>
-                  Recrutador: {item.recruiter_name}
+                  Recrutador: {item.recruiter.name}
                 </Text>
                 <Text style={styles.secundary}>{item.comment}</Text>
               </View>
@@ -487,7 +504,7 @@ function Applies() {
                 {/* Lista de testes selecionados */}
                 {selectedTests.map((test, index) => (
                   <View key={index} style={styles.applyItem}>
-                    <Text style={test.isNew ? styles.newTest : styles.oldTest}>{test.title}</Text>
+                    <Text style={test.status===2 ? styles.newTest : styles.commonTest}>{test.title}</Text>
                     <TouchableOpacity onPress={() => handleDeselectTest(test.id)}>
                       <Feather
                         style={styles.actionButtonText}
@@ -519,8 +536,8 @@ function Applies() {
                       <Text style={styles.labelName}>Selecionar questionários:</Text>
                       <View style={styles.spacing} />
                         {tests.map((test) => (
-                          <TouchableOpacity key={test.id} onPress={() => handleTestSelection(test.id)}>
-                            <Text style={test.isNew ? styles.newTest : styles.oldTest}>{test.title}</Text>
+                          <TouchableOpacity key={test.id} onPress={() => handleSelectTest(test.id)}>
+                            <Text style={test.status===4 ? styles.removedTest : styles.commonTest}>{test.title}</Text>
                           </TouchableOpacity>
                         ))}
                       <TouchableOpacity onPress={toggleTestModal}>
@@ -553,112 +570,168 @@ function Applies() {
       {/* Modal UPDATE APPLY */}
       <Modal visible={editModalVisible} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Editar Aplicação</Text>
+          <ScrollView style={styles.scrollViewSpace}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Editar Aplicação</Text>
 
-            <Text style={styles.labelName}>Recrutador</Text>
-            <Picker
-              selectedValue={selectedRecruiter}
-              onValueChange={(itemValue) => setSelectedRecruiter(itemValue)}
-            >
-              <Picker.Item label="Selecione o recrutador" value={null} />
-              {recruiters.map((recruiter) => (
-                <Picker.Item
-                  key={recruiter.id}
-                  label={recruiter.name}
-                  value={recruiter.id}
-                />
-              ))}
-            </Picker>
-
-            <Text style={styles.labelName}>Candidato</Text>
-            <Picker
-              selectedValue={selectedCandidate}
-              onValueChange={(itemValue) => setSelectedCandidate(itemValue)}
-            >
-              <Picker.Item label="Selecione o candidato" value={null} />
-              {candidates.map((candidate) => (
-                <Picker.Item
-                  key={candidate.id}
-                  label={candidate.name}
-                  value={candidate.id}
-                />
-              ))}
-            </Picker>
-
-            <Text style={styles.labelName}>Observações</Text>
-            <TextInput
-              multiline // Permite várias linhas de texto
-              numberOfLines={4} // Número inicial de linhas visíveis
-              placeholder="Informações sobre a aplicação ..."
-              value={selectedApply ? selectedApply.comment : ""}
-              onChangeText={(text) =>
-                setSelectedApply({ ...selectedApply, comment: text })
-              }
-              style={styles.memoInput} // Estilos personalizados se necessário
-            />
-
-            <Text style={styles.labelName}>Data Início</Text>
-            <TouchableOpacity
-              style={styles.datePickerButton}
-              onPress={handleOnPressDateS}
-            >
-              <Text>{formatDate(dateStart)}</Text>
-            </TouchableOpacity>
-            <Modal animationType="fade" transparent={true} visible={openS}>
-              <View style={styles.modalOverlay}>
-                <View style={styles.modalContent}>
-                  <DatePicker
-                    mode="calendar"
-                    minimumDate={startDate}
-                    selected={new Date(dateStart)}
-                    onDateChange={handleDateChangeS}
+              <Text style={styles.labelName}>Recrutador</Text>
+              <Picker
+                selectedValue={selectedRecruiter}
+                onValueChange={(itemValue) => setSelectedRecruiter(itemValue)}
+              >
+                <Picker.Item label="Selecione o recrutador" value={null} />
+                {recruiters.map((recruiter) => (
+                  <Picker.Item
+                    key={recruiter.id}
+                    label={recruiter.name}
+                    value={recruiter.id}
                   />
+                ))}
+              </Picker>
 
-                  <TouchableOpacity onPress={handleOnPressDateS}>
-                    <Text>Confirmar</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </Modal>
-
-            <Text style={styles.labelName}>Prazo Final</Text>
-            <TouchableOpacity
-              style={styles.datePickerButton}
-              onPress={handleOnPressDateF}
-            >
-              <Text>{formatDate(dateFinish)}</Text>
-            </TouchableOpacity>
-            <Modal animationType="fade" transparent={true} visible={openF}>
-              <View style={styles.modalOverlay}>
-                <View style={styles.modalContent}>
-                  <DatePicker
-                    mode="calendar"
-                    minimumDate={startDate}
-                    selected={new Date(dateFinish)}
-                    onDateChange={handleDateChangeF}
+              <Text style={styles.labelName}>Candidato</Text>
+              <Picker
+                selectedValue={selectedCandidate}
+                onValueChange={(itemValue) => setSelectedCandidate(itemValue)}
+              >
+                <Picker.Item label="Selecione o candidato" value={null} />
+                {candidates.map((candidate) => (
+                  <Picker.Item
+                    key={candidate.id}
+                    label={candidate.name}
+                    value={candidate.id}
                   />
+                ))}
+              </Picker>
 
-                  <TouchableOpacity onPress={handleOnPressDateF}>
-                    <Text>Confirmar</Text>
-                  </TouchableOpacity>
+              <Text style={styles.labelName}>Observações</Text>
+              <TextInput
+                multiline // Permite várias linhas de texto
+                numberOfLines={4} // Número inicial de linhas visíveis
+                placeholder="Informações sobre a aplicação ..."
+                value={selectedApply ? selectedApply.comment : ""}
+                onChangeText={(text) =>
+                  setSelectedApply({ ...selectedApply, comment: text })
+                }
+                style={styles.memoInput} // Estilos personalizados se necessário
+              />
+
+              <Text style={styles.labelName}>Data Início</Text>
+              <TouchableOpacity
+                style={styles.datePickerButton}
+                onPress={handleOnPressDateS}
+              >
+                <Text>{formatDate(dateStart)}</Text>
+              </TouchableOpacity>
+              <Modal animationType="fade" transparent={true} visible={openS}>
+                <View style={styles.modalOverlay}>
+                  <View style={styles.modalContent}>
+                    <DatePicker
+                      mode="calendar"
+                      minimumDate={startDate}
+                      selected={new Date(dateStart)}
+                      onDateChange={handleDateChangeS}
+                    />
+
+                    <TouchableOpacity onPress={handleOnPressDateS}>
+                      <Text>Confirmar</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              </View>
-            </Modal>
+              </Modal>
 
-            <View style={styles.modalButtonGroup}>
-              <Button
-                title="Salvar"
-                onPress={handleEditApply}
-                color="#007AFF"
-              />
-              <Button
-                title="Cancelar"
-                onPress={() => setEditModalVisible(false)}
-                color="#A0ABDF"
-              />
+              <Text style={styles.labelName}>Prazo Final</Text>
+              <TouchableOpacity
+                style={styles.datePickerButton}
+                onPress={handleOnPressDateF}
+              >
+                <Text>{formatDate(dateFinish)}</Text>
+              </TouchableOpacity>
+              <Modal animationType="fade" transparent={true} visible={openF}>
+                <View style={styles.modalOverlay}>
+                  <View style={styles.modalContent}>
+                    <DatePicker
+                      mode="calendar"
+                      minimumDate={startDate}
+                      selected={new Date(dateFinish)}
+                      onDateChange={handleDateChangeF}
+                    />
+
+                    <TouchableOpacity onPress={handleOnPressDateF}>
+                      <Text>Confirmar</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </Modal>
+
+              {/* ======================================================================================= */}
+              <View style={styles.spacing} />
+              <Text style={styles.modalTitle}>Questionários</Text>
+
+              <View>
+                {/* Lista de testes selecionados */}
+                {selectedTests.map((test, index) => (
+                  <View key={index} style={styles.applyItem}>
+                    <Text style={test.status===2 ? styles.newTest : styles.commonTest}>{test.title}</Text>
+                    <TouchableOpacity onPress={() => handleDeselectTest(test.id)}>
+                      <Feather
+                        style={styles.actionButtonText}
+                        name="delete"
+                        size={24}
+                        color="#FF3B30"
+                      />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+
+                {/* Botão para adicionar novo teste */}
+                <TouchableOpacity
+                  style={styles.modalMiniButtonArea}
+                  onPress={toggleTestModal}
+                >
+                  <Feather
+                    style={styles.actionButtonText}
+                    name="plus-circle"
+                    size={24}
+                    color="#007AFF"
+                  />
+                </TouchableOpacity>
+
+                {/* Modal de seleção de testes */}
+                <Modal visible={isTestModalVisible} animationType="fade" transparent>
+                  <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                      <Text style={styles.labelName}>Selecionar questionários:</Text>
+                      <View style={styles.spacing} />
+                        {tests.map((test) => (
+                          <TouchableOpacity key={test.id} onPress={() => handleSelectTest(test.id)}>
+                            <Text style={test.status===4 ? styles.removedTest : styles.commonTest}>{test.title}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      <TouchableOpacity onPress={toggleTestModal}>
+                        <Text style={styles.buttonCloseModal}>Voltar</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </Modal>
+              </View>
+              <View style={styles.spacing} />
+              {/* ======================================================================================= */}
+
+              <View style={styles.modalButtonGroup}>
+                <Button
+                  title="Salvar"
+                  onPress={handleEditApply}
+                  color="#007AFF"
+                />
+                <Button
+                  title="Cancelar"
+                  onPress={() => setEditModalVisible(false)}
+                  color="#A0ABDF"
+                />
+              </View>
             </View>
-          </View>
+          </ScrollView>
         </View>
       </Modal>
 
@@ -893,7 +966,11 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: 'green',
   },
-  oldTest: {
+  removedTest: {
+    fontWeight: "bold",
+    color: "#8B0000",   
+  },
+  commonTest: {
     fontWeight: "bold",
   },
   spacing: {
