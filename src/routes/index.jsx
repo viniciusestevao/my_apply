@@ -7,6 +7,8 @@ import Users from "../pages/Users";
 import exportedFunctions from "../pages/People";
 import Applies from "../pages/Applies";
 import Tests from "../pages/Tests";
+import Questions from "../pages/Questions";
+import Answer_Test from "../pages/Answer_Test";
 import StackRoutes from "./stackRoutes";
 
 const Drawer = createDrawerNavigator();
@@ -110,6 +112,22 @@ function Routes() {
           drawerIcon: ({ focused, size, color }) => (
             <MaterialCommunityIcons
               name={
+                focused ? "book-open" : "book-open-outline"
+              }
+              size={size}
+              color={color}
+            />
+          ),
+        }}
+      />  
+      <Drawer.Screen
+        name="Questions"
+        component={Questions}
+        options={{
+          title: "Questões",
+          drawerIcon: ({ focused, size, color }) => (
+            <MaterialCommunityIcons
+              name={
                 focused ? "view-list" : "view-list-outline"
               }
               size={size}
@@ -118,6 +136,24 @@ function Routes() {
           ),
         }}
       />  
+      <Drawer.Screen
+        name="Answer_Test"
+        component={Tests}
+        options={{
+          title: "Responder",
+          drawerIcon: ({ focused, size, color }) => (
+            <MaterialCommunityIcons
+              name={
+                focused ? "comment-edit" : "comment-edit-outline"
+              }
+              size={size}
+              color={color}
+            />
+          ),
+        }}
+      />  
+
+
       <Drawer.Screen
         name="LoginScreenDrawer"
         component={StackRoutes}

@@ -126,8 +126,7 @@ function Applies() {
           const savedTests = fetchedTests.filter((test) => test.status === 3); // Filtrar testes com status 3 (Saved)
           const availableTests = fetchedTests.filter((test) => test.status === 1); // Filtrar testes com status 1 (Available)
          
-          setSelectedTests(savedTests); // Atualizar selectedTests com testes salvos (status 3)
-          
+          setSelectedTests(savedTests); // Atualizar selectedTests com testes salvos (status 3)          
           setTests(availableTests); // Atualizar tests com testes disponíveis (status 1)
         } else {
           console.log("Erro ao buscar a lista de testes dessa aplicação");
@@ -532,18 +531,20 @@ function Applies() {
                 {/* Modal de seleção de testes */}
                 <Modal visible={isTestModalVisible} animationType="fade" transparent>
                   <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                      <Text style={styles.labelName}>Selecionar questionários:</Text>
-                      <View style={styles.spacing} />
-                        {tests.map((test) => (
-                          <TouchableOpacity key={test.id} onPress={() => handleSelectTest(test.id)}>
-                            <Text style={test.status===4 ? styles.removedTest : styles.commonTest}>{test.title}</Text>
-                          </TouchableOpacity>
-                        ))}
-                      <TouchableOpacity onPress={toggleTestModal}>
-                        <Text style={styles.buttonCloseModal}>Voltar</Text>
-                      </TouchableOpacity>
-                    </View>
+                    <ScrollView style={styles.scrollViewSpace}>
+                      <View style={styles.modalContent}>
+                        <Text style={styles.labelName}>Selecionar Questionários:</Text>
+                        <View style={styles.spacing} />
+                          {tests.map((test) => (
+                            <TouchableOpacity key={test.id} onPress={() => handleSelectTest(test.id)}>
+                              <Text style={test.status===4 ? styles.removedTest : styles.commonTest}>{test.title}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        <TouchableOpacity onPress={toggleTestModal}>
+                          <Text style={styles.buttonCloseModal}>Voltar</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </ScrollView>
                   </View>
                 </Modal>
               </View>
@@ -700,18 +701,20 @@ function Applies() {
                 {/* Modal de seleção de testes */}
                 <Modal visible={isTestModalVisible} animationType="fade" transparent>
                   <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                      <Text style={styles.labelName}>Selecionar questionários:</Text>
-                      <View style={styles.spacing} />
-                        {tests.map((test) => (
-                          <TouchableOpacity key={test.id} onPress={() => handleSelectTest(test.id)}>
-                            <Text style={test.status===4 ? styles.removedTest : styles.commonTest}>{test.title}</Text>
-                          </TouchableOpacity>
-                        ))}
-                      <TouchableOpacity onPress={toggleTestModal}>
-                        <Text style={styles.buttonCloseModal}>Voltar</Text>
-                      </TouchableOpacity>
-                    </View>
+                    <ScrollView style={styles.scrollViewSpace}>
+                      <View style={styles.modalContent}>
+                        <Text style={styles.labelName}>Selecionar Questionários:</Text>
+                        <View style={styles.spacing} />
+                          {tests.map((test) => (
+                            <TouchableOpacity key={test.id} onPress={() => handleSelectTest(test.id)}>
+                              <Text style={test.status===4 ? styles.removedTest : styles.commonTest}>{test.title}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        <TouchableOpacity onPress={toggleTestModal}>
+                          <Text style={styles.buttonCloseModal}>Voltar</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </ScrollView>
                   </View>
                 </Modal>
               </View>
