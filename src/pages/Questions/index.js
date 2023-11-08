@@ -57,9 +57,6 @@ const CustomRadioButton = ({ options, selectedOption, onSelectOption, onRemoveOp
                 }}
               />
             )}
-
-            
-
           </View>
           
           <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -215,11 +212,11 @@ function Questions() {
 
     const validJson = question.body.replace(/'/g, '"');
     const { options, rightOption } = convertBodyToOptions(validJson);
-    setOptions(options); // Defina as alternativas no estado options
+    // console.log("options -> ", options);
+    setOptions(options);
     if (rightOption){
-      setSelectedOption(rightOption.text); // Defina a alternativa correta no estado selectedOption
+      setSelectedOption(rightOption.text); 
     }
-    console.log(question.question_type);
     if ((question.question_type === "dissertative" && questionType) || (question.question_type === "alternative" && !questionType))
     {
       toggleSwitch();
@@ -646,7 +643,7 @@ const styles = StyleSheet.create({
     alignItems: "center", // Alinha os elementos verticalmente
     marginBottom: 12,
     borderBottomWidth: 1,
-    borderColor: "#ccc",
+    borderColor: "#8FBBCF",
     paddingBottom: 8,
   },
   questionInfo: {
@@ -739,7 +736,7 @@ const styles = StyleSheet.create({
     width: "100%",
     padding: 8,
     borderWidth: 1,
-    borderColor: "#CCC",
+    borderColor: "#8FBBCF",
     marginBottom: 16,
     borderRadius: 4,
     textAlign: "left",

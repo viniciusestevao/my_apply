@@ -23,7 +23,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Switch } from 'react-native-paper';
 
 
-const CustomRadioButton = ({ options, selectedOption, onSelectOption, onRemoveOption }) => {
+const CustomRadioButton = ({ options, selectedOption, onSelectOption }) => {
   return (
     <View>
       {options.map((option) => (
@@ -57,25 +57,10 @@ const CustomRadioButton = ({ options, selectedOption, onSelectOption, onRemoveOp
                 }}
               />
             )}
-
-            
-
           </View>
           
           <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <Text style={{ marginLeft: 10, flex: 1 }}>{option}</Text>
-            <TouchableOpacity
-              key={option}
-              style={styles.modalMiniButtonArea}
-              onPress={() => onRemoveOption(option)}
-            >
-              <Feather
-                style={styles.actionButtonText}
-                name="delete"
-                size={24}
-                color="#FF3B30"
-              />
-            </TouchableOpacity>
           </View>
         </TouchableOpacity>
       ))}
@@ -83,29 +68,28 @@ const CustomRadioButton = ({ options, selectedOption, onSelectOption, onRemoveOp
   );
 };
 
-
 function Answer_Test() {
-  const [questions, setQuestions] = useState([]);
+  const [applyTests, setApplyTests] = useState([]);
   
-  const [options, setOptions] = useState([]); // Lista de optiones disponíveis
-  const [newOption, setNewOption] = useState(null);
-  const [selectedOption, setSelectedOption] = useState(null);
+  const [answerTestModalVisible, setAnswerTestModalVisible] = useState(false);
+  const [currentApplyTest, setCurrentApplyTest] = useState({});
+  
+  const [selectedOptions, setSelectedOptions] = useState({});
+  const [dissertativeResponses, setDissertativeResponses] = useState({});
 
-  const [questionType, setQuestionType] = useState(false);
 
-  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
-  const [isOptionListVisible, setIsOptionListVisible] = useState(false); // Estado para controlar a visibilidade do modal
-  const [isModalVisible, setIsModalVisible] = useState(false); 
-  const [editModalVisible, setEditModalVisible] = useState(false);
-  const [selectedQuestion, setSelectedQuestion] = useState(null);
-  const [newQuestion, setNewQuestion] = useState({
-    tag: "",
-    description: "",
-    instruction: "",
-    question_type: "",
-    body: "",
-    answer: "",
-  });
+// Inicializa selectedOptions com as seleções padrão vazias
+  useEffect(() => {
+    const initialSelectedOptions = {};
+    applyTests.forEach((applyTest) => {
+      applyTest.test_items.forEach((testItem) => {
+        if (testItem.type_question === 'alternative') {
+          initialSelectedOptions[testItem.id] = null;
+        }
+      });
+    });
+    setSelectedOptions(initialSelectedOptions);
+  }, [applyTests]);
 
 
   const getAuthToken = async () => {
@@ -118,504 +102,255 @@ function Answer_Test() {
     }
   };
 
-  const fetchQuestions = async () => {
+  const processTestItemBody = (testItem) => {
+    try {
+      const validJson = testItem.body.replace(/'/g, '"');
+      const parsedBody = JSON.parse(validJson);
+  
+      if (Array.isArray(parsedBody)) {
+        const options = parsedBody.map((item) => item.text);
+        return options;
+      } else {
+        console.error('O campo body de test_item não é um array de objetos JSON válido.');
+        return [];
+      }
+    } catch (error) {
+      console.error('Erro ao analisar o campo body de test_item:', error);
+      return [];
+    }
+  };
+  
+  const fetchApplyTests = async () => {
     try {
       const token = await getAuthToken();
       
       if (token) {
-        const response = await axios.get(`${API_BASE_URL}/questions/?token=${token}`); 
-        setQuestions(response.data);
+        const response = await axios.get(`${API_BASE_URL}/apply_tests/?token=${token}`);
+        const applyTestsData = response.data;
+
+        const applyTestsWithProcessedItems = applyTestsData.map((applyTest) => {
+          if (applyTest && applyTest.test_items) {
+            const processedItems = applyTest.test_items.map((testItem) => {
+              if (testItem) {
+                const processedItem = processTestItemBody(testItem);
+                return { ...testItem, processedItem };
+              }
+              return testItem;
+            });
+        
+            return { ...applyTest, test_items: processedItems };
+          } else {
+            // Se applyTest.test_items for vazio ou inexistente, atribua um array vazio a ele
+            return { ...applyTest, test_items: [] };
+          }
+        });
+        // console.log("applyTestsWithProcessedItems -> ", applyTestsWithProcessedItems);
+        setApplyTests(applyTestsWithProcessedItems);
+
       } else {
         console.error('Token de autenticação ausente ou inválido.');
       }
     } catch (error) {
-      console.error("Erro ao buscar questões:", error);
+      console.error("Erro ao buscar questionários:", error);
     }
   };
 
   useEffect(() => {
-    fetchQuestions();
+    fetchApplyTests();
   }, []);
 
-  const toggleSwitch = () => {
-    setQuestionType(!questionType);
-    setIsOptionListVisible(!questionType); 
-  };
+  useEffect(() => {
+    // console.log("applyTests -> ", applyTests);
+    // console.log("currentApplyTest -> ", currentApplyTest);
+  }, [applyTests]); 
 
-  const handleCreateQuestion = async () => {
+
+  const handleSaveResponses = async () => {
     try {
       const token = await getAuthToken();
-
+  
       if (token) {
-        const questionTypeValue = questionType ? "alternative" : "dissertative"; // Verifica o valor de questionType
-
-        const questionData = { question: {
-          tag: newQuestion.tag,
-          description: newQuestion.description,
-          instruction: newQuestion.instruction,
-          question_type: questionTypeValue, 
-          body: buildQuestionBody(options, selectedOption),
-          answer: newQuestion.answer,
-        }};
-        console.log(questionData);
-
-        const response = await axios.post(`${API_BASE_URL}/questions/?token=${token}`, questionData);
-
-        if (response.status === 201) {
-          setIsModalVisible(false);
-          setNewQuestion({ tag: "", description: "", instruction: "", question_type: "", body: "", answer: ""});
-          // toggleSwitch(response.data.question_type !== "alternative");
-          toggleSwitch(true);
-          fetchQuestions();
-
-        } else {
-          console.log("Erro ao criar questão:", response.data.message);
+        const answersToUpdate = {};
+        // Adicione respostas dissertativas, se houver
+        if (dissertativeResponses) {
+          Object.keys(dissertativeResponses).forEach((id) => {
+            answersToUpdate[id] = {
+              candidate_answer: dissertativeResponses[id],
+            };
+          });
         }
+        // Adicione respostas das questões de múltipla escolha, se houver
+        if (selectedOptions) {
+          Object.keys(selectedOptions).forEach((id) => {
+            answersToUpdate[id] = {
+              candidate_answer: selectedOptions[id],
+            };
+          });
+        }
+        await axios.post(`${API_BASE_URL}/test_items?token=${token}`, { answersToUpdate } );
+        fetchApplyTests();
+        setAnswerTestModalVisible(false);
       } else {
         console.error('Token de autenticação ausente ou inválido.');
-      }  
+      }
     } catch (error) {
-      fetchQuestions();
-      // setSelectedOptions(null);
-      console.error("Erro ao criar questão:", error.message);
+      console.error('Erro ao atualizar respostas:', error);
     }
   };
 
-  const buildQuestionBody = (options, selectedOption) => {
-    // Converte as alternativas em um formato desejado
-    const formattedOptions = options.map((option) => ({
-      text: option,
-      right: option === selectedOption,
+  const handleOptionSelect = (id, option) => {
+    setSelectedOptions((prevSelectedOptions) => ({
+      ...prevSelectedOptions,
+      [id]: option,
     }));
-    const questionBody = JSON.stringify(formattedOptions).replace(/"/g, "'");
-    return questionBody;
+  };
+
+
+  const callFetch = async () => {
+    fetchApplyTests();
+  }
+
+
+  const handleEditModalVisible = (isVisible, applyTest) => {
+    setAnswerTestModalVisible(isVisible);
+    setCurrentApplyTest(applyTest);
+    // console.log("handleEditModalVisible ||| currentApplyTest -> ", currentApplyTest.test_items);
+  };
+
+
+  const updateDissertativeResponse = (testItemId, response) => {
+    setDissertativeResponses((prevResponses) => ({
+      ...prevResponses,
+      [testItemId]: response,
+    }));
   };
   
-  const convertBodyToOptions = (body) => {
-    try {
-      const parsedBody = JSON.parse(body);
-  
-      if (Array.isArray(parsedBody)) {
-        const options = parsedBody.map((item) => item.text);
-        const rightOption = parsedBody.find((item) => item.right === true);
-        return { options, rightOption };
-      } else {
-        console.error('O campo body não é um array de objetos JSON válido.');
-        return { options: [], rightOption: null };
-      }
-    } catch (error) {
-      console.error('Erro ao analisar o campo body:', error);
-      return { options: [], rightOption: null };
-    }
-  };
-
-  const handleEditModalVisible = (isVisible, question) => {
-    setEditModalVisible(isVisible);
-    setSelectedQuestion(question);
-
-    const validJson = question.body.replace(/'/g, '"');
-    const { options, rightOption } = convertBodyToOptions(validJson);
-    setOptions(options); // Defina as alternativas no estado options
-    if (rightOption){
-      setSelectedOption(rightOption.text); // Defina a alternativa correta no estado selectedOption
-    }
-    console.log(question.question_type);
-    if ((question.question_type === "dissertative" && questionType) || (question.question_type === "alternative" && !questionType))
-    {
-      toggleSwitch();
-    }
-  };
-
-  const handleEditQuestion = async () => {
-    try {
-      const token = await getAuthToken();
-
-      if (token) {
-        const questionTypeValue = questionType ? "alternative" : "dissertative"; // Verifica o valor de questionType
-
-        questionData = { question: {
-          tag: selectedQuestion.tag,
-          description: selectedQuestion.description,
-          instruction: selectedQuestion.instruction,
-          question_type: questionTypeValue,
-          body: buildQuestionBody(options, selectedOption),
-          answer: selectedQuestion.answer,
-        }};
-        console.log(questionData);
-
-        await axios.put(`${API_BASE_URL}/questions/${selectedQuestion.id}/?token=${token}`, questionData);
-        setNewQuestion({ tag: "", description: "", question_type: "", instruction: "", answer: ""});
-        fetchQuestions();
-        setEditModalVisible(false);
-        setSelectedQuestion(null);
-      } else {
-        console.error('Token de autenticação ausente ou inválido.');
-      } 
-    } catch (error) {
-      console.error("Erro ao atualizar questão:", error);
-    }
-  };
-
-  const handleDeleteModalVisible = (isVisible, question) => {
-    setDeleteModalVisible(isVisible);
-    setSelectedQuestion(question);
-  };
-
-  const handleDeleteQuestion = async () => {
-    try {
-      const token = await getAuthToken();
-
-      if (token) {
-        const response = await axios.delete(`${API_BASE_URL}/questions/${selectedQuestion.id}/?token=${token}`);
-
-        if (response.status === 204) {
-          fetchQuestions(); // Atualiza a lista de usuários após a exclusão
-          setDeleteModalVisible(false);
-          setSelectedQuestion(null);
-        } else {
-          console.log("Erro ao remover questão:", response.data.message);
-        }
-      } else {
-        console.error('Token de autenticação ausente ou inválido.');
-      } 
-    } catch (error) {
-      console.error("Erro ao remover questão:", error);
-    }
-  };
-
-
-  const handleOptionSelect = (option) => {
-    setSelectedOption(option);
-  };
-
-  const handleOptionRemove = (optionItem) => {
-    setOptions(options.filter((option) => option !== optionItem));
-  };
-  
-  const handleTextChange = (text) => {
-    setNewOption(text);
-  };
-
-  const addOption = async () => {
-    // const selectedQuestion = questions.find((question) => question.id === questionId);
-    if (newOption) {
-      // setQuestions(questions.filter((question) => question.id !== questionId));
-      const optionExists = options.some((option) => option === newOption);
-
-      if (optionExists) {
-        Alert.alert('Duplicidade', 'Esta alternativa já existe.');
-      } else {
-        // Adicione a nova opção à lista e limpe o campo de entrada
-        setOptions([...options, newOption]);
-        setNewOption('');
-      }
-    }
-  };
-
 
   return (
     <Container>
-      <Header title="Questões" />
-      <Texto>Lista de questões cadastradas</Texto>
+      <Header title="Responder Questionários" />
+      <Texto>Selecione um questionário: </Texto>
+      <View style={styles.spacing} />
 
-      <TouchableOpacity
-        style={styles.actionButton}
-        onPress={() => setIsModalVisible(true)}
-      >
-        <Text style={styles.modalButtonText}>NOVA QUESTÃO</Text>
-      </TouchableOpacity>
-    
+          {/* <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => callFetch()}
+          >
+            <Text style={styles.modalButtonText}>RECARREGAR</Text>
+          </TouchableOpacity> */}
+
       <View style={styles.container}>
         <FlatList
-          data={questions}
+          data={applyTests}
           keyExtractor={(item) => item.id.toString()}
           renderItem={({ item }) => (
-            <View style={styles.questionItem}>
-              <View style={styles.questionInfo}>
-                <Text style={styles.primary}>{item.tag} - {item.description}</Text>
+            // <View style={styles.container}>
+              <View style={styles.questionItem}>
+                <View style={styles.questionInfo}>
+                  <Text style={styles.primary}>{item.title} - {item.description}</Text>
+                  {/* <Text style={styles.secundary}>{item.instruction}</Text> */}
+                  <Text style={styles.secundary}>Candidato: {item.candidate_name}</Text>
+                  <Text style={styles.secundary}>Recrutador: {item.recruiter_name}</Text>
+                </View>
+                
+                <View style={styles.userActions}>
+                  <TouchableOpacity
+                    onPress={() => handleEditModalVisible(true, item)}
+                  >
+                    <Feather
+                      style={styles.actionButtonText}
+                      name="edit-3"
+                      size={24}
+                      color="#007AFF"
+                    />
+                  </TouchableOpacity>
+                </View>
               </View>
-              <View style={styles.userActions}>
-                <TouchableOpacity
-                  onPress={() => handleEditModalVisible(true, item)}
-                >
-                  <Feather
-                    style={styles.actionButtonText}
-                    name="edit-3"
-                    size={24}
-                    color="#007AFF"
-                  />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => handleDeleteModalVisible(true, item)}
-                >
-                  <Feather
-                    style={styles.actionButtonText}
-                    name="trash-2"
-                    size={24}
-                    color="#FF3B30"
-                  />
-                </TouchableOpacity>
-              </View>
-            </View>
+            // </View>
           )}
         />
       </View>
 
-      {/* Modal CREATE QUESTION */}
-      <Modal visible={isModalVisible} animationType="fade" transparent>
+
+      {/* Modal ANSWER TEST */}
+      <Modal visible={answerTestModalVisible} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
-          <ScrollView style={styles.scrollViewSpace}>
+          {/* <ScrollView style={styles.scrollViewSpace}> */}
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Adicionar Questão</Text>
+              {/* <View style={styles.questionItem}> */}
 
-            
-              <Text style={styles.labelName}>Códigos</Text>
-              <TextInput
-                multiline // Permite várias linhas de texto
-                numberOfLines={2} // Número inicial de linhas visíveis
-                placeholder="Informe TAGs para pesquisas rápidas"
-                value={newQuestion.tag}
-                onChangeText={(text) =>
-                  setNewQuestion({ ...newQuestion, tag: text })
-                }
-                style={styles.memoInput} // Estilos personalizados se necessário
-              />
+                <Text style={styles.modalTitle}>{currentApplyTest ? currentApplyTest.title : ""}</Text>
 
-              <Text style={styles.labelName}>Descrição</Text>
-              <TextInput
-                multiline // Permite várias linhas de texto
-                numberOfLines={4} // Número inicial de linhas visíveis
-                placeholder="Enunciado da questão"
-                value={newQuestion.description} //
-                onChangeText={(text) =>
-                  setNewQuestion({ ...newQuestion, description: text })
-                }
-                style={styles.memoInput} // Estilos personalizados se necessário
-              />
-
-              <View style={styles.inputContainer}>
-                <Text style={styles.labelName}>Questão de múltipla escolha</Text>
-                <Switch value={questionType} onValueChange={toggleSwitch}/>
-              </View>
-              <View style={styles.spacing} />
-
-              {/* ======================================================================================= */}
-              {!isOptionListVisible && (
-                <View animationType="fade" transparent>
-                  <Text style={styles.labelName}>Resposta</Text>
-                  <TextInput
-                    multiline 
-                    numberOfLines={5} 
-                    placeholder="Informe a resposta esperada para esta questão"
-                    value={newQuestion.answer} //
-                    onChangeText={(text) =>
-                      setNewQuestion({ ...newQuestion, answer: text })
-                    }
-                    style={styles.memoInput} // Estilos personalizados se necessário
-                  />
-                  <View style={styles.spacing} />
-                </View>
-              )}
-            {/* ======================================================================================= */}
-              {isOptionListVisible && (
-                <View animationType="fade" transparent>
-                  {/* <Text style={styles.modalTitle}>Alternativas</Text> */}
-
-                  <View>
-                    {/* Botão para adicionar nova alternativa */}
-                    <Text style={styles.labelName}>Nova Alternativa</Text>
-                    <View style={styles.inputContainer}>
-                      <TextInput
-                        onChangeText={(text) => handleTextChange(text)}
-                        placeholder="Digite um texto para a nova alternativa"
-                        style={styles.modalInput}
-                        value={newOption}
-                      />
-                      <TouchableOpacity
-                        style={styles.modalMiniButtonArea}
-                        onPress={addOption}
-                      >
-                        <Feather
-                          style={styles.actionButtonText}
-                          name="plus-circle"
-                          size={24}
-                          color="#007AFF"
-                        />
-                      </TouchableOpacity>
-                    </View>
+                <View style={styles.questionItem}>
+                  <View style={styles.questionInfo}>
+                    <Text style={styles.primary}>{currentApplyTest ? currentApplyTest.description : ""}</Text>
+                    <Text style={styles.secundary}>{currentApplyTest ? currentApplyTest.instruction : ""}</Text>
                     <View style={styles.spacing} />
-
-                    <CustomRadioButton
-                      options={options}
-                      selectedOption={selectedOption}
-                      onSelectOption={handleOptionSelect}
-                      onRemoveOption={handleOptionRemove}
-                    />
-                    {/* <Text>Selected Option: {selectedOption}</Text> */}
-
+                    <Text style={styles.primary}> QUESTÕES :</Text>
+                    <View style={styles.miniSpacing} />
                   </View>
-                  <View style={styles.spacing} />
                 </View>
-              )}
+                            
+
+                <FlatList
+                  data={currentApplyTest.test_items}
+                  keyExtractor={(item) => item.id.toString()}
+                  renderItem={({ item }) => (
+                    <View style={styles.questionItem}>
+                      <View style={styles.questionInfo}>
+                        <Text style={styles.primary}>  *  {item.description}</Text>
+                        <View style={styles.miniSpacing} />
+
+                        {item.question_type === "alternative" && (
+                          <CustomRadioButton
+                            key={item.id}
+                            options={item.processedItem}
+                            selectedOption={selectedOptions[item.id]}
+                            onSelectOption={(option) => handleOptionSelect(item.id, option)}
+                          />  
+                        )}
+                        {item.question_type === "dissertative" && (
+                          <View>
+                            <Text style={styles.labelName}>Resposta:</Text>
+                            <TextInput
+                              multiline 
+                              numberOfLines={5} 
+                              placeholder="Sua resposta..."
+                              value={dissertativeResponses[item.id] || ''}
+                              onChangeText={(text) => updateDissertativeResponse(item.id, text)}
+                              style={styles.memoInput} // Estilos personalizados se necessário
+                            />
+                          </View>
+                        )}
+
+                      </View>
+                    </View>
+                  )}
+                />
+
+              {/* </View> */}
+
               {/* ======================================================================================= */}
 
+              <View style={styles.spacing} />
               <View style={styles.modalButtonGroup}>
                 <Button
                   title="Salvar"
-                  onPress={handleCreateQuestion}
+                  onPress={handleSaveResponses }
                   color="#007AFF"
                 />
                 <Button
                   title="Cancelar"
-                  onPress={() => setIsModalVisible(false)}
-                  color="#A0ABDF" /* A0ABDF FF3B30 */
-                />
-              </View>
-            </View>
-          </ScrollView>
-        </View>
-      </Modal>
-
-      {/* Modal UPDATE QUESTION */}
-      <Modal visible={editModalVisible} animationType="fade" transparent>
-        <View style={styles.modalOverlay}>
-          <ScrollView style={styles.scrollViewSpace}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Editar Questão</Text>
-
-              <Text style={styles.labelName}>Códigos</Text>
-              <TextInput
-                multiline // Permite várias linhas de texto
-                numberOfLines={2} // Número inicial de linhas visíveis
-                placeholder="Informe TAGs para pesquisas rápidas"
-                value={selectedQuestion ? selectedQuestion.tag : ""}
-                onChangeText={(text) =>
-                  setSelectedQuestion({ ...selectedQuestion, tag: text })
-                }
-                style={styles.memoInput} // Estilos personalizados se necessário
-              />
-
-              <Text style={styles.labelName}>Descrição</Text>
-              <TextInput
-                multiline // Permite várias linhas de texto
-                numberOfLines={4} // Número inicial de linhas visíveis
-                placeholder="Enunciado da questão"
-                value={selectedQuestion ? selectedQuestion.description : ""}
-                onChangeText={(text) =>
-                  setSelectedQuestion({ ...selectedQuestion, description: text })
-                }
-                style={styles.memoInput} // Estilos personalizados se necessário
-              />
-
-
-              <View style={styles.inputContainer}>
-                <Text style={styles.labelName}>Questão de múltipla escolha</Text>
-                <Switch value={questionType} onValueChange={toggleSwitch}/>
-              </View>
-              <View style={styles.spacing} />
-
-              {/* ======================================================================================= */}
-              {!isOptionListVisible && (
-                <View animationType="fade" transparent>
-                  <Text style={styles.labelName}>Resposta</Text>
-                  <TextInput
-                    multiline 
-                    numberOfLines={5} 
-                    placeholder="Informe a resposta esperada para esta questão"
-                    value={newQuestion.answer} //
-                    onChangeText={(text) =>
-                      setNewQuestion({ ...newQuestion, answer: text })
-                    }
-                    style={styles.memoInput} // Estilos personalizados se necessário
-                  />
-                <View style={styles.spacing} />
-              </View>
-            )}
-            {/* ======================================================================================= */}
-              {isOptionListVisible && (
-                <View animationType="fade" transparent>
-                  {/* <Text style={styles.modalTitle}>Alternativas</Text> */}
-
-                  <View>
-                    {/* Botão para adicionar nova alternativa */}
-                    <Text style={styles.labelName}>Nova Alternativa</Text>
-                    <View style={styles.inputContainer}>
-                      <TextInput
-                        onChangeText={(text) => handleTextChange(text)}
-                        placeholder="Digite um texto para a nova alternativa"
-                        style={styles.modalInput}
-                        value={newOption}
-                      />
-                      <TouchableOpacity
-                        style={styles.modalMiniButtonArea}
-                        onPress={addOption}
-                      >
-                        <Feather
-                          style={styles.actionButtonText}
-                          name="plus-circle"
-                          size={24}
-                          color="#007AFF"
-                        />
-                      </TouchableOpacity>
-                    </View>
-                    <View style={styles.spacing} />
-
-                    <CustomRadioButton
-                      options={options}
-                      selectedOption={selectedOption}
-                      onSelectOption={handleOptionSelect}
-                      onRemoveOption={handleOptionRemove}
-                    />
-                    {/* <Text>Selected Option: {selectedOption}</Text> */}
-
-                  </View>
-                  <View style={styles.spacing} />
-                </View>
-              )}
-              {/* ======================================================================================= */}
-
-
-              <View style={styles.modalButtonGroup}>
-                <Button
-                  title="Salvar"
-                  onPress={handleEditQuestion}
-                  color="#007AFF"
-                />
-                <Button
-                  title="Cancelar"
-                  onPress={() => setEditModalVisible(false)}
+                  onPress={() => setAnswerTestModalVisible(false)}
                   color="#A0ABDF"
                 />
               </View>
             </View>
-          </ScrollView>
+          {/* </ScrollView> */}
         </View>
       </Modal>
 
-      {/* Modal DELETE USER */}
-      <Modal visible={deleteModalVisible} animationType="fade" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContentDelete}>
-            <Text style={styles.modalText}>
-              Deseja mesmo remover a questão ?
-            </Text>
-            <View style={styles.modalButtonGroup}>
-              <TouchableOpacity
-                onPress={handleDeleteQuestion}
-                style={styles.modalButton}
-              >
-                <Text style={styles.modalButtonText}>Confirmar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setDeleteModalVisible(false)}
-                style={[styles.modalButton, styles.modalButtonCancel]}
-              >
-                <Text style={styles.modalButtonText}>Cancelar</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+
     </Container>
   );
 }
@@ -645,7 +380,7 @@ const styles = StyleSheet.create({
     alignItems: "center", // Alinha os elementos verticalmente
     marginBottom: 12,
     borderBottomWidth: 1,
-    borderColor: "#ccc",
+    borderColor: "#8FBBCF",
     paddingBottom: 8,
   },
   questionInfo: {
@@ -835,6 +570,9 @@ const styles = StyleSheet.create({
   },
   spacing: {
     marginBottom: 35,
+  },
+  miniSpacing: {
+    marginBottom: 20,
   },
 });
 

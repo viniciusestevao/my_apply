@@ -325,12 +325,6 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
-  userItem: {
-    marginBottom: 12,
-    borderBottomWidth: 1,
-    borderColor: "#ccc",
-    paddingBottom: 8,
-  },
   modalContainer: {
     flex: 1,
     justifyContent: "center",
@@ -340,14 +334,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-
   userItem: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 12,
     borderBottomWidth: 1,
-    borderColor: "#ccc",
+    borderColor: "#8FBBCF",
     paddingBottom: 8,
   },
   userInfo: {

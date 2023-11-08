@@ -577,7 +577,7 @@ const styles = StyleSheet.create({
     alignItems: "center", // Alinha os elementos verticalmente
     marginBottom: 12,
     borderBottomWidth: 1,
-    borderColor: "#ccc",
+    borderColor: "#8FBBCF",
     paddingBottom: 8,
   },
   itemInfo: {

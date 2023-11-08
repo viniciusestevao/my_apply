@@ -1,7 +1,7 @@
 import styled from 'styled-components';
 
 export const Container = styled.SafeAreaView`
-  background-color: #C4E2FA;
+  background-color: #B2D2EA;
   flex: 1;
   padding: 4px 0;
   //align-items: center;

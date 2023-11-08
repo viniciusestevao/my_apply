@@ -1330,12 +1330,6 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
-  peopleItem: {
-    marginBottom: 12,
-    borderBottomWidth: 1,
-    borderColor: "#ccc",
-    paddingBottom: 8,
-  },
   modalContainer: {
     flex: 1,
     justifyContent: "center",
@@ -1351,7 +1345,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 12,
     borderBottomWidth: 1,
-    borderColor: "#ccc",
+    borderColor: "#8FBBCF",
     paddingBottom: 8,
   },
   peopleInfo: {

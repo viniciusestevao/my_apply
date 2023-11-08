@@ -4,7 +4,7 @@ import axios from "axios";
 import { useNavigation } from "@react-navigation/native";
 import API_BASE_URL from "../apiConfig"; // Importar a URL base da API
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
+import Icon from 'react-native-vector-icons/FontAwesome';
 
 const LoginScreen = () => {
   const [username, setUsername] = useState("");
@@ -15,8 +15,8 @@ const LoginScreen = () => {
   const handleLogin = async () => {
     try {
       const response = await axios.post(`${API_BASE_URL}/login`, {
-        username: username,
-        password: password,
+        username: "vi", //username,
+        password: "12345678", //password,
       });
 
       if (response.status === 200) {
@@ -43,27 +43,27 @@ const LoginScreen = () => {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.loginTitle}>
-        Acesse o <Text style={styles.blueText}>APPLY</Text>
-      </Text>
+      <View style={styles.container}>
+      <Text style={styles.logoText2}> AVALIE </Text>
+        <Text style={styles.logoText}> AVALIE </Text>
 
-      <Text style={styles.errorText}>{errorMessage}</Text>
-      <TextInput
-        placeholder="Nome de usuário"
-        value={username}
-        onChangeText={setUsername}
-        style={styles.input}
-      />
-      <TextInput
-        placeholder="Senha"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-        style={styles.input}
-      />
-      <Button title="Login" onPress={handleLogin} />
-    </View>
+        <Text style={styles.loginTitle}>Acesso</Text>
+        <Text style={styles.errorText}>{errorMessage}</Text>
+        <TextInput
+          placeholder="Nome de usuário"
+          value={username}
+          onChangeText={setUsername}
+          style={styles.input}
+        />
+        <TextInput
+          placeholder="Senha"
+          secureTextEntry
+          value={password}
+          onChangeText={setPassword}
+          style={styles.input}
+        />
+        <Button title="Entrar" onPress={handleLogin} />
+      </View>
   );
 };
 
@@ -80,20 +80,30 @@ const styles = StyleSheet.create({
   },
   input: {
     width: "80%",
-    marginBottom: 15,
+    marginBottom: 20,
     padding: 10,
     borderWidth: 1,
     borderColor: "#ccc",
   },
   loginTitle: {
-    fontSize: 25,
+    fontSize: 20,
     fontWeight: "bold",
-    marginBottom: 25,
-    textAlign: "center",
+    marginBottom: 5,
+     textAlign: "left",
   },
-  blueText: {
-    color: "#007AFF",
-    fontSize: 32,
+  logoText: {
+    color: '#7FABBF',
+    fontWeight: "bold",
+    fontSize: 65,
+    marginBottom: 45,
+  },
+  logoText2: {
+    color: '#EEE',
+    fontWeight: "bold",
+    fontSize: 92,
+    textAlign: 'center', 
+		position: 'absolute',
+  	bottom: 500, 
   },
 });
 

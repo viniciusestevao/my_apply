@@ -138,7 +138,7 @@ function Routes() {
       />  
       <Drawer.Screen
         name="Answer_Test"
-        component={Tests}
+        component={Answer_Test}
         options={{
           title: "Responder",
           drawerIcon: ({ focused, size, color }) => (
