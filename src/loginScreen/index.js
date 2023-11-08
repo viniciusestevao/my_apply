@@ -15,8 +15,8 @@ const LoginScreen = () => {
   const handleLogin = async () => {
     try {
       const response = await axios.post(`${API_BASE_URL}/login`, {
-        username: "vi", //username,
-        password: "12345678", //password,
+        username: username, // "vi"
+        password: password, // "12345678"
       });
 
       if (response.status === 200) {
